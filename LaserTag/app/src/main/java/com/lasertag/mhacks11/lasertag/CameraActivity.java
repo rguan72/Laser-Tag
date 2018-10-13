@@ -37,16 +37,22 @@ import android.view.SurfaceView;
 import android.widget.Button;
 import android.widget.EditText;
 
-//import com.google.firebase.database.DataSnapshot;
-//import com.google.firebase.database.DatabaseError;
-//import com.google.firebase.database.DatabaseReference;
-//import com.google.firebase.database.FirebaseDatabase;
-//import com.google.firebase.database.ValueEventListener;
-
 
 
 public class CameraActivity extends Activity implements OnTouchListener, CvCameraViewListener2 {
     private static final String  TAG = "CameraActivity";
+
+    // Are we showing the filtered video feed?
+    // set to FALSE when deploying
+    private static final boolean IS_DEBUG_VIDEO = false;
+
+    // Radius of accuracy needed to shoot a target
+    private static final int SHOOT_THRESHOLD = 200;
+
+    // The target that we find
+    private RotatedRect target = null;
+    // Are we locked on and able to shoot a target?
+    private boolean lockedOn;
 
     private ArrayList<Mat> channels;
     private Mat camInput;
@@ -211,10 +217,6 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         // Split channels
         Core.split(camInput, channels);
 
-//        // Filter RGB
-//        Core.inRange(channels.get(0), new Scalar(0), new Scalar(150), hueFiltered);
-//        Core.inRange(channels.get(0), new Scalar(100), new Scalar(255), satFiltered);
-//        Core.inRange(channels.get(0), new Scalar(0), new Scalar(150), valFiltered);
 
 //          //Filter HSV
         Core.inRange(channels.get(0), new Scalar(40), new Scalar(93), hueFiltered );
@@ -247,9 +249,27 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
             }
         }
 
-        if (largestRect != null) {
-            // Draw a circle or whatever around our main rect!
-            Imgproc.circle(camInput, largestRect.center, 10, new Scalar(255, 0, 0));
+        // Set our target. NOTE: This can be null.
+        setTarget(largestRect);
+
+        // Are we positioned to actually HIT a target?
+        lockedOn = false;
+        if (hasTarget()) {
+
+            double dx = getTarget().center.x - camInput.width() / 2,
+                   dy = getTarget().center.y - camInput.height() / 2;
+
+            if (dx*dx + dy*dy < SHOOT_THRESHOLD*SHOOT_THRESHOLD) {
+                lockedOn = true;
+            }
+            if (IS_DEBUG_VIDEO) {
+                // Draw a circle or whatever around our main rect!
+                Imgproc.circle(camInput, getTarget().center, 10, new Scalar(255, 0, 0));
+            }
+        }
+
+        if (lockedOn) {
+
         }
 
         // Free up
@@ -271,5 +291,25 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
         return camInput;
     }
+
+    // Target getters and setters
+    private void setTarget(RotatedRect target) {
+        this.target = target;
+    }
+    private RotatedRect getTarget() {
+        return target;
+    }
+    private boolean hasTarget() {
+        return target != null;
+    }
+
+    // Locked on getters and setters
+    private void setLockedOn(boolean lockedOn) {
+        this.lockedOn = lockedOn;
+    }
+    private boolean isLockedOn() {
+        return lockedOn;
+    }
+
 }
 
