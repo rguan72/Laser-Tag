@@ -22,6 +22,7 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.media.MediaPlayer;
 import android.os.Build;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -56,6 +57,9 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     private RotatedRect target = null;
     // Are we locked on and able to shoot a target?
     private boolean lockedOn;
+
+    // Audio handling
+    MediaPlayer gunSounds;
 
     private ArrayList<Mat> channels;
     private Mat camInput;
@@ -101,6 +105,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
         //Ask for Camera Permission
         getCameraPermission();
+
+        gunSounds = MediaPlayer.create(getApplicationContext(), R.raw.shoot);
 
         //Search for the "Join" Button
         /*Button button = findViewById(R.id.join);
@@ -206,7 +212,12 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     public boolean onTouch(View v, MotionEvent event) {
         // TODO: Fire!
-        return false; // don't need subsequent touch events
+        if (gunSounds.isPlaying()) {
+            gunSounds.stop();
+        }
+        gunSounds.start();
+
+        return true; // don't need subsequent touch events
     }
 
     @Override
