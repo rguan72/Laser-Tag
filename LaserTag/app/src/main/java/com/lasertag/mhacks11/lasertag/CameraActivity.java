@@ -22,7 +22,9 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.SoundPool;
 import android.os.Build;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -59,7 +61,10 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     private boolean lockedOn;
 
     // Audio handling
-    MediaPlayer gunSounds;
+    private SoundPool soundPool;
+    private int soundID_shoot,
+                soundID_empty,
+                soundID_reload;
 
     private ArrayList<Mat> channels;
     private Mat camInput;
@@ -69,8 +74,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     private CameraBridgeViewBase mOpenCvCameraView;
 
-
-
+    
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
@@ -106,58 +110,25 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         //Ask for Camera Permission
         getCameraPermission();
 
-        gunSounds = MediaPlayer.create(getApplicationContext(), R.raw.shoot);
-
-        //Search for the "Join" Button
-        /*Button button = findViewById(R.id.join);
-        button.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v)
-            {
-                //Creating text dialog
-                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                builder.setTitle("Username");
-
-                // Set up the input
-                final EditText input = new EditText(MainActivity.this);
-                // Specify the type of input expected; this, for example, sets the input as a password, and will mask the text
-                input.setInputType(InputType.TYPE_CLASS_TEXT);
-                builder.setView(input);
-
-                // Set up the buttons
-                builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which)
-                    {
-                        String name = input.getText().toString();
-                        Player player = new Player (name);
-
-                        //Get Database
-                        FirebaseDatabase database = FirebaseDatabase.getInstance();
-                        //Select "path" in database
-                        DatabaseReference myRef = database.getReference("players");
-                        //Set Value
-                        myRef.setValue(player);
-                    }
-                });
-                builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.cancel();
-                    }
-                });
-
-                builder.show();
+        // Audio
+        soundPool = new SoundPool(10, AudioManager.STREAM_MUSIC, 0);
+        // TODO: Can this be left commented out?
+        /*soundPool.setOnLoadCompleteListener(new SoundPool.OnLoadCompleteListener() {
+            @Override
+            public void onLoadComplete(SoundPool soundPool, int sampleId,
+                                       int status) {
+                loaded = true;
             }
         });*/
+        soundID_shoot  = soundPool.load(this, R.raw.shoot,  1);
+        soundID_empty  = soundPool.load(this, R.raw.empty,  1);
+        soundID_reload = soundPool.load(this, R.raw.reload, 1);
 
         mOpenCvCameraView = findViewById(R.id.camera_activity_surface_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
-
         getCameraPermission();
-
-
     }
 
     @Override
@@ -212,12 +183,9 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     public boolean onTouch(View v, MotionEvent event) {
         // TODO: Fire!
-        if (gunSounds.isPlaying()) {
-            gunSounds.stop();
-        }
-        gunSounds.start();
+        playSound(soundID_shoot);
 
-        return true; // don't need subsequent touch events
+        return false; // don't need subsequent touch events
     }
 
     @Override
@@ -267,14 +235,14 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         setTarget(largestRect);
 
         // Are we positioned to actually HIT a target?
-        lockedOn = false;
+        setLockedOn(false);
         if (hasTarget()) {
 
             double dx = getTarget().center.x - camInput.width() / 2,
                    dy = getTarget().center.y - camInput.height() / 2;
 
             if (dx*dx + dy*dy < SHOOT_THRESHOLD*SHOOT_THRESHOLD) {
-                lockedOn = true;
+                setLockedOn(true);
             }
             if (IS_DEBUG_VIDEO) {
                 // Draw a circle or whatever around our main rect!
@@ -282,11 +250,16 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
             }
         }
 
-        if (lockedOn) {
-            vibrate(10);
+        if (isLockedOn()) {
+            vibrate(100);
         }
 
-        // Free up
+        // Green screen, if we're playing the game
+        if (!IS_DEBUG_VIDEO) {
+            camInput.setTo(new Scalar(0, 255, 0));
+        }
+
+        // Clean up
         for(Mat mat : channels) {
             mat.release();
         }
@@ -295,19 +268,20 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         dilateKernel.release();
         System.gc();
 
-        // Flip video so it's reasonable when displayed
-        Mat dest = new Mat();
-        Core.flip(camInput, dest, 1);
-        dest.copyTo(camInput);
-        dest.release();
-
-        // Green screen
+        if (IS_DEBUG_VIDEO) {
+            // Flip video so it's reasonable when displayed
+            Mat dest = new Mat();
+            Core.flip(camInput, dest, 1);
+            dest.copyTo(camInput);
+            dest.release();
+        }
 
         return camInput;
     }
 
     /**
      * Vibrates phone for a given time in milliseconds
+     * @param ms : Time (in milliseconds) to vibrate
      */
     private void vibrate(int ms) {
         Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
@@ -319,6 +293,21 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
             v.vibrate(ms);
         }
     }
+
+    /**
+     * Plays a sound
+     * @param soundID (one of three. See declarations above.)
+     */
+    private void playSound(int soundID) {
+        AudioManager audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        float actualVolume = (float) audioManager
+                .getStreamVolume(AudioManager.STREAM_MUSIC);
+        float maxVolume = (float) audioManager
+                .getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        float volume = actualVolume / maxVolume;
+        soundPool.play(soundID, volume, volume, 1, 0, 1f);
+    }
+
 
     // Target getters and setters
     private void setTarget(RotatedRect target) {
