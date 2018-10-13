@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "589806699312",
+    "firebase_url": "https://laser-tag-15b95.firebaseio.com",
+    "project_id": "laser-tag-15b95",
+    "storage_bucket": "laser-tag-15b95.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:589806699312:android:f7f52a0112710f8b",
+        "android_client_info": {
+          "package_name": "com.example.adris.opencvtest"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "589806699312-fog51fodkf30he1glfno21o9asro75qo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.adris.opencvtest",
+            "certificate_hash": "d55ce5e80557b4a36d0da624de8fc8bff8f83c7e"
+          }
+        },
+        {
+          "client_id": "589806699312-dc93mencnc7l7mjnrsvo90ksjn7r83n5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOfKwkrrYfDslbc_bwnfO0ov7rMWg_3e4"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 2,
+          "other_platform_oauth_client": [
+            {
+              "client_id": "589806699312-dc93mencnc7l7mjnrsvo90ksjn7r83n5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
