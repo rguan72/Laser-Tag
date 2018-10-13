@@ -18,7 +18,11 @@ import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.imgproc.Imgproc;
 
+import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -46,6 +50,8 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
     */
 
     private CameraBridgeViewBase mOpenCvCameraView;
+
+
 
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -83,6 +89,11 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.color_blob_detection_activity_surface_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+
+        getCameraPermission();
+
+
     }
 
     @Override
@@ -191,18 +202,37 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
         camInput = inputFrame.rgba();
 
         // Convert to HSV
-        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_RGB2HSV);
+        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_BGR2HSV);
         // Split channels
         Core.split(camInput, channels);
 
         Mat filtered = new Mat();
 
-        int minH = 0,
+        int minH = 10,
             maxH = (256 * 42 / 360);
-        Core.inRange(channels.get(0), new Scalar(minH), new Scalar(maxH), filtered );
+        Core.inRange(channels.get(0), new Scalar(40, 60, 48), new Scalar(91, 255, 238), filtered );
+        // Blur to remove noise
+        //Mat filtered_blur = new Mat();
+        //Imgproc.GaussianBlur(filtered, filtered_blur, new Size(9,9), 1);
+        // Find all the contours
+        List<MatOfPoint> contours = new ArrayList<>();
+        Imgproc.findContours(filtered, contours, new Mat(), 3, 1);
+        double maxVal = 0;
+        int maxValIdx = 0;
+        for (int contourIdx = 0; contourIdx < contours.size(); contourIdx++)
+        {
+            double contourArea = Imgproc.contourArea(contours.get(contourIdx));
+            if (maxVal < contourArea)
+            {
+                maxVal = contourArea;
+                maxValIdx = contourIdx;
+            }
+        }
 
+        Mat outline = new Mat();
+        Imgproc.drawContours(outline, contours, maxValIdx, new Scalar(0,255,0), 5);
         // Return just the filtered jazz
-        camInput = filtered;
+        camInput = outline;
 
         /*
         if (mIsColorSelected) {
@@ -228,4 +258,15 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
 
         return new Scalar(pointMatRgba.get(0, 0));
     }
+    @TargetApi(Build.VERSION_CODES.M)
+    private void getCameraPermission ()
+    {
+        //Log.d ("HI", "HI");
+        int permissionCheck = getApplicationContext().checkSelfPermission(Manifest.permission.CAMERA);
+        //Log.d("Permission", "Permission: " + permissionCheck + ", and " + PackageManager.PERMISSION_DENIED);
+        if (permissionCheck== PackageManager.PERMISSION_DENIED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 0);
+        }
+    }
+
 }
