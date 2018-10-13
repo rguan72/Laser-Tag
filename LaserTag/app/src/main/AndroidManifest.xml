@@ -3,10 +3,15 @@
     package="com.lasertag.mhacks11.lasertag">
     <uses-permission android:name="android.permission.CAMERA"/>
 
+    <!-- Camera -->
     <uses-feature android:name="android.hardware.camera"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.front"/>
     <uses-feature android:name="android.hardware.camera.front.autofocus" android:required="false"/>
+
+    <!-- Vibration -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
