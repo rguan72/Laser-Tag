@@ -2,7 +2,6 @@ package com.example.adris.opencvtest;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
@@ -11,19 +10,23 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
-import org.opencv.core.Rect;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
-import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
-
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.pm.ActivityInfo;
 import android.os.Bundle;
+import android.text.InputType;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -31,23 +34,23 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.View.OnTouchListener;
 import android.view.SurfaceView;
+import android.widget.Button;
+import android.widget.EditText;
+
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 public class MainActivity extends Activity implements OnTouchListener, CvCameraViewListener2 {
     private static final String  TAG              = "MainActivity";
 
     private ArrayList<Mat> channels;
     private Mat camInput;
-
-    /*
-    private boolean              mIsColorSelected = false;
-    private Mat                  mRgba;
-    private Scalar               mBlobColorRgba;
-    private Scalar               mBlobColorHsv;
-    private ColorBlobDetector    mDetector;
-    private Mat                  mSpectrum;
-    private Size                 SPECTRUM_SIZE;
-    private Scalar               CONTOUR_COLOR;
-    */
+    private Mat hueFiltered,
+            satFiltered,
+                valFiltered;
 
     private CameraBridgeViewBase mOpenCvCameraView;
 
@@ -57,15 +60,13 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
         @Override
         public void onManagerConnected(int status) {
             switch (status) {
-                case LoaderCallbackInterface.SUCCESS:
-                {
+                case LoaderCallbackInterface.SUCCESS: {
                     Log.i(TAG, "OpenCV loaded successfully");
                     mOpenCvCameraView.enableView();
                     mOpenCvCameraView.setCameraIndex(1);
                     mOpenCvCameraView.setOnTouchListener(MainActivity.this);
                 } break;
-                default:
-                {
+                default: {
                     super.onManagerConnected(status);
                 } break;
             }
@@ -82,11 +83,57 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
         Log.i(TAG, "called onCreate");
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         setContentView(R.layout.activity_main);
 
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.color_blob_detection_activity_surface_view);
+        //Ask for Camera Permission
+        getCameraPermission();
+
+        //Search for the "Join" Button
+        Button button = findViewById(R.id.join);
+        button.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v)
+            {
+                //Creating text dialog
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                builder.setTitle("Username");
+
+                // Set up the input
+                final EditText input = new EditText(MainActivity.this);
+                // Specify the type of input expected; this, for example, sets the input as a password, and will mask the text
+                input.setInputType(InputType.TYPE_CLASS_TEXT);
+                builder.setView(input);
+
+                // Set up the buttons
+                builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which)
+                    {
+                        String name = input.getText().toString();
+                        Player player = new Player (name);
+
+                        //Get Database
+                        FirebaseDatabase database = FirebaseDatabase.getInstance();
+                        //Select "path" in database
+                        DatabaseReference myRef = database.getReference("players");
+                        //Set Value
+                        myRef.setValue(player);
+                    }
+                });
+                builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.cancel();
+                    }
+                });
+
+                builder.show();
+            }
+        });
+
+        mOpenCvCameraView = findViewById(R.id.color_blob_detection_activity_surface_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
@@ -97,16 +144,14 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
     }
 
     @Override
-    public void onPause()
-    {
+    public void onPause() {
         super.onPause();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
     }
 
     @Override
-    public void onResume()
-    {
+    public void onResume() {
         super.onResume();
         if (!OpenCVLoader.initDebug()) {
             Log.d(TAG, "Internal OpenCV library not found. Using OpenCV Manager for initialization");
@@ -123,19 +168,24 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
             mOpenCvCameraView.disableView();
     }
 
+    @TargetApi(Build.VERSION_CODES.M)
+    private void getCameraPermission ()
+    {
+        //Log.d ("HI", "HI");
+        int permissionCheck = getApplicationContext().checkSelfPermission(Manifest.permission.CAMERA);
+        //Log.d("Permission", "Permission: " + permissionCheck + ", and " + PackageManager.PERMISSION_DENIED);
+        if (permissionCheck== PackageManager.PERMISSION_DENIED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA},0);
+        }
+    }
+
     public void onCameraViewStarted(int width, int height) {
         // TODO: Init CV Constants here
         channels = new ArrayList<>();
         camInput = new Mat(height, width, CvType.CV_8UC4);
-        /*
-        mRgba = new Mat(height, width, CvType.CV_8UC4);
-        mDetector = new ColorBlobDetector();
-        mSpectrum = new Mat();
-        mBlobColorRgba = new Scalar(255);
-        mBlobColorHsv = new Scalar(255);
-        SPECTRUM_SIZE = new Size(200, 64);
-        CONTOUR_COLOR = new Scalar(255,0,0,255);
-        */
+        hueFiltered = new Mat();
+        satFiltered = new Mat();
+        valFiltered = new Mat();
     }
 
     public void onCameraViewStopped() {
@@ -145,128 +195,78 @@ public class MainActivity extends Activity implements OnTouchListener, CvCameraV
 
     public boolean onTouch(View v, MotionEvent event) {
         // TODO: Fire!
-        /*
-        int cols = mRgba.cols();
-        int rows = mRgba.rows();
-
-        int xOffset = (mOpenCvCameraView.getWidth() - cols) / 2;
-        int yOffset = (mOpenCvCameraView.getHeight() - rows) / 2;
-
-        int x = (int)event.getX() - xOffset;
-        int y = (int)event.getY() - yOffset;
-
-        Log.i(TAG, "Touch image coordinates: (" + x + ", " + y + ")");
-
-        if ((x < 0) || (y < 0) || (x > cols) || (y > rows)) return false;
-
-        Rect touchedRect = new Rect();
-
-        touchedRect.x = (x>4) ? x-4 : 0;
-        touchedRect.y = (y>4) ? y-4 : 0;
-
-        touchedRect.width = (x+4 < cols) ? x + 4 - touchedRect.x : cols - touchedRect.x;
-        touchedRect.height = (y+4 < rows) ? y + 4 - touchedRect.y : rows - touchedRect.y;
-
-        Mat touchedRegionRgba = mRgba.submat(touchedRect);
-
-        Mat touchedRegionHsv = new Mat();
-        Imgproc.cvtColor(touchedRegionRgba, touchedRegionHsv, Imgproc.COLOR_RGB2HSV_FULL);
-
-        // Calculate average color of touched region
-        mBlobColorHsv = Core.sumElems(touchedRegionHsv);
-        int pointCount = touchedRect.width*touchedRect.height;
-        for (int i = 0; i < mBlobColorHsv.val.length; i++)
-            mBlobColorHsv.val[i] /= pointCount;
-
-        mBlobColorRgba = converScalarHsv2Rgba(mBlobColorHsv);
-
-        Log.i(TAG, "Touched rgba color: (" + mBlobColorRgba.val[0] + ", " + mBlobColorRgba.val[1] +
-                ", " + mBlobColorRgba.val[2] + ", " + mBlobColorRgba.val[3] + ")");
-
-        mDetector.setHsvColor(mBlobColorHsv);
-
-        Imgproc.resize(mDetector.getSpectrum(), mSpectrum, SPECTRUM_SIZE, 0, 0, Imgproc.INTER_LINEAR_EXACT);
-
-        mIsColorSelected = true;
-
-        touchedRegionRgba.release();
-        touchedRegionHsv.release();
-
-        return false; // don't need subsequent touch events
-        */
         return false; // don't need subsequent touch events
     }
 
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         camInput = inputFrame.rgba();
-
+        Mat mask = new Mat();
         // Convert to HSV
-        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_BGR2HSV);
+
+        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_RGB2HSV);
+
         // Split channels
         Core.split(camInput, channels);
 
-        Mat filtered = new Mat();
+//        // Filter RGB
+//        Core.inRange(channels.get(0), new Scalar(0), new Scalar(150), hueFiltered);
+//        Core.inRange(channels.get(0), new Scalar(100), new Scalar(255), satFiltered);
+//        Core.inRange(channels.get(0), new Scalar(0), new Scalar(150), valFiltered);
 
-        int minH = 10,
-            maxH = (256 * 42 / 360);
-        Core.inRange(channels.get(0), new Scalar(40, 60, 48), new Scalar(91, 255, 238), filtered );
-        // Blur to remove noise
-        //Mat filtered_blur = new Mat();
-        //Imgproc.GaussianBlur(filtered, filtered_blur, new Size(9,9), 1);
-        // Find all the contours
+//          //Filter HSV
+        Core.inRange(channels.get(0), new Scalar(40), new Scalar(93), hueFiltered );
+        Core.inRange(channels.get(1), new Scalar(60), new Scalar(255), satFiltered );
+        Core.inRange(channels.get(2), new Scalar(48), new Scalar(238), valFiltered );
+
+//        // Mix together
+        Core.bitwise_and(hueFiltered, satFiltered, satFiltered);
+        Core.bitwise_and(satFiltered, valFiltered, camInput);
+
+        // Erode and Dilate
+        Mat erodeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
+        Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(9, 9));
+        Imgproc.erode(camInput, camInput, erodeKernel);
+        Imgproc.dilate(camInput, camInput, dilateKernel);
+
         List<MatOfPoint> contours = new ArrayList<>();
-        Imgproc.findContours(filtered, contours, new Mat(), 3, 1);
-        double maxVal = 0;
-        int maxValIdx = 0;
-        for (int contourIdx = 0; contourIdx < contours.size(); contourIdx++)
-        {
-            double contourArea = Imgproc.contourArea(contours.get(contourIdx));
-            if (maxVal < contourArea)
-            {
-                maxVal = contourArea;
-                maxValIdx = contourIdx;
+        Imgproc.findContours(camInput, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+        double largestArea = 0.0;
+        RotatedRect largestRect = null;
+        for(MatOfPoint mop : contours) {
+            MatOfPoint2f mop2f = new MatOfPoint2f();
+            mop.convertTo(mop2f, CvType.CV_32FC1);
+            RotatedRect rect = Imgproc.minAreaRect(mop2f);
+
+            if (rect.size.area() > largestArea) {
+                largestArea = rect.size.area();
+                largestRect = rect;
             }
         }
 
-        Mat outline = new Mat();
-        Imgproc.drawContours(outline, contours, maxValIdx, new Scalar(0,255,0), 5);
-        // Return just the filtered jazz
-        camInput = outline;
-
-        /*
-        if (mIsColorSelected) {
-            mDetector.process(mRgba);
-            List<MatOfPoint> contours = mDetector.getContours();
-            Log.e(TAG, "Contours count: " + contours.size());
-            Imgproc.drawContours(mRgba, contours, -1, CONTOUR_COLOR);
-
-            Mat colorLabel = mRgba.submat(4, 68, 4, 68);
-            colorLabel.setTo(mBlobColorRgba);
-
-            Mat spectrumLabel = mRgba.submat(4, 4 + mSpectrum.rows(), 70, 70 + mSpectrum.cols());
-            mSpectrum.copyTo(spectrumLabel);
+        if (largestRect != null) {
+            // Draw a circle or whatever around our main rect!
+            Imgproc.circle(camInput, largestRect.center, 10, new Scalar(255, 0, 0));
         }
-        */
+
+        // Free up
+        for(Mat mat : channels) {
+            mat.release();
+        }
+        mask.release();
+        erodeKernel.release();
+        dilateKernel.release();
+        System.gc();
+
+        // Flip video so it's reasonable when displayed
+        Mat dest = new Mat();
+        Core.flip(camInput, dest, 1);
+        dest.copyTo(camInput);
+        dest.release();
+
+        // Green screen
+
         return camInput;
     }
-
-    private Scalar converScalarHsv2Rgba(Scalar hsvColor) {
-        Mat pointMatRgba = new Mat();
-        Mat pointMatHsv = new Mat(1, 1, CvType.CV_8UC3, hsvColor);
-        Imgproc.cvtColor(pointMatHsv, pointMatRgba, Imgproc.COLOR_HSV2RGB_FULL, 4);
-
-        return new Scalar(pointMatRgba.get(0, 0));
-    }
-    @TargetApi(Build.VERSION_CODES.M)
-    private void getCameraPermission ()
-    {
-        //Log.d ("HI", "HI");
-        int permissionCheck = getApplicationContext().checkSelfPermission(Manifest.permission.CAMERA);
-        //Log.d("Permission", "Permission: " + permissionCheck + ", and " + PackageManager.PERMISSION_DENIED);
-        if (permissionCheck== PackageManager.PERMISSION_DENIED) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 0);
-        }
-    }
-
 }
