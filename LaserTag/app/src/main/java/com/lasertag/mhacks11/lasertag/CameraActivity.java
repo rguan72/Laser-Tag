@@ -20,12 +20,15 @@ import org.opencv.imgproc.Imgproc;
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.text.InputType;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -269,7 +272,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         }
 
         if (lockedOn) {
-
+            vibrate(10);
         }
 
         // Free up
@@ -292,6 +295,20 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         return camInput;
     }
 
+    /**
+     * Vibrates phone for a given time in milliseconds
+     */
+    private void vibrate(int ms) {
+        Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            v.vibrate(VibrationEffect.createOneShot(ms,VibrationEffect.DEFAULT_AMPLITUDE));
+        }else{
+            //deprecated in API 26
+            v.vibrate(ms);
+        }
+    }
+
     // Target getters and setters
     private void setTarget(RotatedRect target) {
         this.target = target;
@@ -310,6 +327,4 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     private boolean isLockedOn() {
         return lockedOn;
     }
-
 }
-
