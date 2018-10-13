@@ -31,6 +31,7 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.text.InputType;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
@@ -294,6 +295,24 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
         return camInput;
     }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+
+        if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP) || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            shoot();
+            return true;
+            // if you are in the circle -- reuse code from vibration
+            //      player 1 kills += 1
+            //      player 2 lives -= = 1
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    void shoot() {
+        Log.i(TAG, "press registered!");
+    }
+
 
     /**
      * Vibrates phone for a given time in milliseconds
