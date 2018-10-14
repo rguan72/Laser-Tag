@@ -56,10 +56,19 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     // Radius of accuracy needed to shoot a target
     private static final int SHOOT_THRESHOLD = 200;
 
+    // How many milliseconds to wait for exposure before reloading
+    private static final int EXPOSE_TIME_THRESHOLD = 500;
+
     // The target that we find
     private RotatedRect target = null;
     // Are we locked on and able to shoot a target?
     private boolean lockedOn;
+
+    // Do we have ammo
+    private boolean hasAmmo = false;
+
+    // When's the last time we were exposed?
+    private long lastTimeExposed = 0;
 
     // Audio handling
     private SoundPool soundPool;
@@ -160,9 +169,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     @TargetApi(Build.VERSION_CODES.M)
     private void getCameraPermission ()
     {
-        //Log.d ("HI", "HI");
         int permissionCheck = getApplicationContext().checkSelfPermission(Manifest.permission.CAMERA);
-        //Log.d("Permission", "Permission: " + permissionCheck + ", and " + PackageManager.PERMISSION_DENIED);
         if (permissionCheck== PackageManager.PERMISSION_DENIED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA},0);
         }
@@ -179,14 +186,23 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     public void onCameraViewStopped() {
         // TODO: Release all mats
-        //mRgba.release();
+        camInput.release();
     }
 
+    // INPUTS
     public boolean onTouch(View v, MotionEvent event) {
         // TODO: Fire!
-        playSound(soundID_shoot);
-
+        shoot();
         return false; // don't need subsequent touch events
+    }
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+
+        if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP) || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            shoot();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
@@ -200,37 +216,41 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         // Split channels
         Core.split(camInput, channels);
 
-
 //          //Filter HSV
         Core.inRange(channels.get(0), new Scalar(40), new Scalar(93), hueFiltered );
-        Core.inRange(channels.get(1), new Scalar(60), new Scalar(255), satFiltered );
-        Core.inRange(channels.get(2), new Scalar(48), new Scalar(238), valFiltered );
+        Core.inRange(channels.get(1), new Scalar(154), new Scalar(255), satFiltered );
+        Core.inRange(channels.get(2), new Scalar(67), new Scalar(238), valFiltered );
 
 //        // Mix together
         Core.bitwise_and(hueFiltered, satFiltered, satFiltered);
-        Core.bitwise_and(satFiltered, valFiltered, camInput);
+        Core.bitwise_and(satFiltered, valFiltered, mask);
 
         // Erode and Dilate
         Mat erodeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
-        Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(9, 9));
-        Imgproc.erode(camInput, camInput, erodeKernel);
-        Imgproc.dilate(camInput, camInput, dilateKernel);
+        Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
+        Imgproc.erode(mask, mask, erodeKernel);
+        Imgproc.dilate(mask, mask, dilateKernel);
+
+        erodeKernel.release();
+        dilateKernel.release();
 
         List<MatOfPoint> contours = new ArrayList<>();
-        Imgproc.findContours(camInput, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+        Imgproc.findContours(mask, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
         double largestArea = 0.0;
+        double areaThresh = 10.0;
         RotatedRect largestRect = null;
         for(MatOfPoint mop : contours) {
             MatOfPoint2f mop2f = new MatOfPoint2f();
             mop.convertTo(mop2f, CvType.CV_32FC1);
             RotatedRect rect = Imgproc.minAreaRect(mop2f);
 
-            if (rect.size.area() > largestArea) {
+            if (rect.size.area() > largestArea && rect.size.area() > areaThresh) {
                 largestArea = rect.size.area();
                 largestRect = rect;
             }
         }
+        Log.i("Largest Area:", "area: " + largestArea);
 
         // Set our target. NOTE: This can be null.
         setTarget(largestRect);
@@ -238,25 +258,42 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         // Are we positioned to actually HIT a target?
         setLockedOn(false);
         if (hasTarget()) {
+            // Reload
+            if (!hasAmmo()) {
+                // How much time has passed since we were exposed
+                long dtime = System.currentTimeMillis() - lastTimeExposed;
+                if (dtime > EXPOSE_TIME_THRESHOLD) {
+                    reload();
+                    // Reset our time exposed timer
+                    lastTimeExposed = System.currentTimeMillis();
+                }
+            }
 
-            double dx = getTarget().center.x - camInput.width() / 2,
-                   dy = getTarget().center.y - camInput.height() / 2;
+            double dx = getTarget().center.x - mask.width() / 2,
+                   dy = getTarget().center.y - mask.height() / 2;
 
             if (dx*dx + dy*dy < SHOOT_THRESHOLD*SHOOT_THRESHOLD) {
                 setLockedOn(true);
             }
             if (IS_DEBUG_VIDEO) {
                 // Draw a circle or whatever around our main rect!
-                Imgproc.circle(camInput, getTarget().center, 10, new Scalar(255, 0, 0));
+                Imgproc.cvtColor(mask, mask, Imgproc.COLOR_GRAY2RGB);
+                Imgproc.circle(mask, getTarget().center, 10, new Scalar(255, 0, 0));
             }
+        } else {
+            // Reset our time exposed timer
+            lastTimeExposed = System.currentTimeMillis();
         }
 
         if (isLockedOn()) {
             vibrate(100);
         }
 
-        // Green screen, if we're playing the game
-        if (!IS_DEBUG_VIDEO) {
+        // Mask if we're debugging, Green screen, if we're playing the game
+        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_HSV2RGB);
+        if (IS_DEBUG_VIDEO) {
+            mask.copyTo(camInput);
+        } else {
             camInput.setTo(new Scalar(0, 255, 0));
         }
 
@@ -280,23 +317,20 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         return camInput;
     }
 
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-
-        if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP) || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            shoot();
-            return true;
-            // if you are in the circle -- reuse code from vibration
-            //      player 1 kills += 1
-            //      player 2 lives -= = 1
-        }
-        return super.onKeyDown(keyCode, event);
-    }
-
+    /**
+     * Pew Pew!
+     */
     void shoot() {
-        Log.i(TAG, "press registered!");
+        if (hasAmmo()) {
+            loseAmmo();
+            if (isLockedOn()) {
+                //TODO: Hit player!
+            }
+            playSound(soundID_shoot);
+        } else {
+            playSound(soundID_empty);
+        }
     }
-
 
     /**
      * Vibrates phone for a given time in milliseconds
@@ -345,5 +379,17 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     }
     private boolean isLockedOn() {
         return lockedOn;
+    }
+
+    // Ammo
+    private boolean hasAmmo() {
+        return hasAmmo;
+    }
+    private void reload() {
+        playSound(soundID_reload);
+        hasAmmo = true;
+    }
+    private void loseAmmo() {
+        hasAmmo = false;
     }
 }
