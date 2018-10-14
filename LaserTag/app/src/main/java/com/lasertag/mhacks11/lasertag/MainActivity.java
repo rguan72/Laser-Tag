@@ -20,7 +20,6 @@ import com.google.firebase.database.ValueEventListener;
 
 public class MainActivity extends AppCompatActivity
 {
-    Database db = new Database ();
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -28,8 +27,8 @@ public class MainActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        db.updateNumPlayers ();
-        db.updateTotalDeaths ();
+        Database.updateNumPlayers ();
+        Database.updateTotalDeaths ();
     }
 
     public void join (View view)
@@ -49,7 +48,7 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onClick(DialogInterface dialog, int which)
             {
-                db.addPlayer (input.getText().toString());
+                Database.addPlayer (input.getText().toString());
                 startCamera();
             }
         });
@@ -72,9 +71,10 @@ public class MainActivity extends AppCompatActivity
         startActivity(intent);
     }
 
+    // Debug Button!
     public void kill (View view)
     {
-        db.killPlayer("player" + db.getNumPlayers());
+        Database.killPlayer("player" + Database.getNumPlayers());
     }
 
 

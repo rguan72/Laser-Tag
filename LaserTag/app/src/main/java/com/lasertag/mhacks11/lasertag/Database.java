@@ -10,39 +10,43 @@ import com.google.firebase.database.ValueEventListener;
 
 public class Database
 {
-    private DatabaseReference myRef = FirebaseDatabase.getInstance ().getReference();
+    private static DatabaseReference myRef = FirebaseDatabase.getInstance ().getReference();
     private static long numPlayers;
     private static long totalDeaths;
+    private static Player player;
 
-    public Database ()
-    {
-
-    }
-
-    public long getNumPlayers ()
+    public static long getNumPlayers ()
     {
         return numPlayers;
     }
 
-    public long getTotalDeaths ()
+    public static long getTotalDeaths ()
     {
         return totalDeaths;
     }
 
+    public static Player getPlayer ()
+    {
+        return player;
+    }
+
     //EFFECTS: Increase numPlayers by 1, adds a player into the database
     //MODIFIES: numPlayers, database
-    public void addPlayer (String name)
+    public static void addPlayer (String name)
     {
         ++numPlayers;
         myRef.child ("numPlayers").setValue(numPlayers);
 
-        Player player = new Player(name);
+        player = new Player(name);
         myRef.child ("players").child ("player" + numPlayers).setValue(player);
     }
 
     //Kill player with id
-    public void killPlayer (final String id)
+    public static void killPlayer (final String id)
     {
+        //if (id.equals(player.getName()))
+        //    CameraActivity.die();
+
         myRef.child("players").child (id).child ("deaths").addListenerForSingleValueEvent(new ValueEventListener()
         {
             @Override
@@ -64,7 +68,7 @@ public class Database
 
     //EFFECTS: updates numPlayers to the correct size
     //MODIFIES: numPlayers
-    public void updateNumPlayers ()
+    public static void updateNumPlayers ()
     {
         myRef.child("numPlayers").addValueEventListener(new ValueEventListener()
         {
@@ -85,7 +89,7 @@ public class Database
         });
     }
 
-    public void updateTotalDeaths ()
+    public static void updateTotalDeaths ()
     {
         myRef.child("totalDeaths").addValueEventListener(new ValueEventListener()
         {
@@ -98,6 +102,9 @@ public class Database
                 else
                     totalDeaths = (long) tmp;
                 Log.d ("totalDeaths", "" + totalDeaths);
+
+                if (player.getDeaths() > 0)
+                    CameraActivity.die ();
 
                 if (numPlayers - totalDeaths <= 1)
                 {

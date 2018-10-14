@@ -44,8 +44,6 @@ import android.view.SurfaceView;
 import android.widget.Button;
 import android.widget.EditText;
 
-
-
 public class CameraActivity extends Activity implements OnTouchListener, CvCameraViewListener2 {
     private static final String  TAG = "CameraActivity";
 
@@ -62,7 +60,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     // The Game ID of this user. Set when you "join" the game
     private int myGameID = -1;
     // Are we alive?
-    private boolean isAlive = true;
+    private static boolean isAlive = true;
 
     // The target that we find
     private RotatedRect target = null;
@@ -76,11 +74,12 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     private long lastTimeExposed = 0;
 
     // Audio handling
-    private SoundPool soundPool;
-    private int soundID_shoot,
-                soundID_empty,
-                soundID_reload,
-                soundID_death;
+    private static SoundPool soundPool;
+    private static AudioManager audioManager = null;
+    private static int soundID_shoot,
+                       soundID_empty,
+                       soundID_reload,
+                       soundID_death;
 
     private ArrayList<Mat> channels;
     private Mat camInput;
@@ -131,6 +130,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
         // Audio
         soundPool = new SoundPool(10, AudioManager.STREAM_MUSIC, 0);
+        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         // TODO: Can this be left commented out?
         /*soundPool.setOnLoadCompleteListener(new SoundPool.OnLoadCompleteListener() {
             @Override
@@ -185,8 +185,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         }
     }
 
+    // CV Constants
     public void onCameraViewStarted(int width, int height) {
-        // TODO: Init CV Constants here
         channels = new ArrayList<>();
         camInput = new Mat(height, width, CvType.CV_8UC4);
         hueFiltered = new Mat();
@@ -194,14 +194,13 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         valFiltered = new Mat();
     }
 
+    // Final cleanup
     public void onCameraViewStopped() {
-        // TODO: Release all mats
         camInput.release();
     }
 
     // INPUTS
     public boolean onTouch(View v, MotionEvent event) {
-        // TODO: Fire!
         shoot();
         return false; // don't need subsequent touch events
     }
@@ -339,8 +338,16 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         if (isAlive()) {
             if (hasAmmo()) {
                 loseAmmo();
+                // If we're locked on, kill the other player
                 if (isLockedOn()) {
-                    //TODO: Hit player!
+                    String name = Database.getPlayer ().getName();
+
+                    // 1v1 ONLY!!!
+                    if (name.equals("player2"))
+                        Database.killPlayer("player1");
+                    else
+                        Database.killPlayer("player2");
+
                 }
                 playSound(soundID_shoot);
             } else {
@@ -368,8 +375,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
      * Plays a sound
      * @param soundID (one of three. See declarations above.)
      */
-    private void playSound(int soundID) {
-        AudioManager audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+    private static void playSound(int soundID) {
         float actualVolume = (float) audioManager
                 .getStreamVolume(AudioManager.STREAM_MUSIC);
         float maxVolume = (float) audioManager
@@ -414,7 +420,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     private boolean isAlive() {
         return isAlive;
     }
-    private void die() {
+    public static void die() {
         isAlive = false;
         playSound(soundID_death);
     }
