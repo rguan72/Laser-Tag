@@ -7,10 +7,13 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.CvException;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.android.CameraBridgeViewBase;
@@ -89,7 +92,23 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     private CameraBridgeViewBase mOpenCvCameraView;
 
-    
+    /**
+     * Gets the color of a player given their id
+     * @param name
+     * @return
+     */
+    private static final Scalar getPlayerCenterColor(String name) {
+        switch (name) {
+            case "player1":
+                return new Scalar(255, 0, 0);
+            case "player2":
+                return new Scalar(0, 0, 255);
+            case "player3":
+                return new Scalar(255, 0, 255);
+        }
+        return new Scalar(0, 0, 0);
+    }
+
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
@@ -131,14 +150,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         // Audio
         soundPool = new SoundPool(10, AudioManager.STREAM_MUSIC, 0);
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
-        // TODO: Can this be left commented out?
-        /*soundPool.setOnLoadCompleteListener(new SoundPool.OnLoadCompleteListener() {
-            @Override
-            public void onLoadComplete(SoundPool soundPool, int sampleId,
-                                       int status) {
-                loaded = true;
-            }
-        });*/
+
         soundID_shoot  = soundPool.load(this, R.raw.shoot,  1);
         soundID_empty  = soundPool.load(this, R.raw.empty,  1);
         soundID_reload = soundPool.load(this, R.raw.reload, 2);
@@ -214,9 +226,94 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         return super.onKeyDown(keyCode, event);
     }
 
-    @Override
-    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-        camInput = inputFrame.rgba();
+    /**
+     *  Verifies that a potential target has a valid central code thing
+     * @param camInput
+     * @param potentialTarget
+     * @return
+     */
+    private int verifyCentralColor(Mat camInput, RotatedRect potentialTarget) {
+        if (Database.getPlayer().getName().equals("player1")) {
+            return 0;
+        } else {
+            return 1;
+        }
+        // TODO: FAR FUTURE/POST HACKATHON: Implement this
+        /*Scalar[] colors = new Scalar[3];
+        colors[0] = getPlayerCenterColor("player1");
+        colors[1] = getPlayerCenterColor("player2");
+        colors[2] = getPlayerCenterColor("player3");
+
+        Rect r = potentialTarget.boundingRect();
+        Log.i("Rectangle", "(" + r.x + ", " + r.y + ", " + r.width + ", " + r.height + ")");
+        Mat check = null;
+        try {
+            check = camInput.submat(r);
+        } catch (CvException e) {
+            Log.i("Rectangle: ","Avoided an exception");
+            return -1;
+        }
+        Mat checker = new Mat();
+        Mat rMat = new Mat(),
+            gMat = new Mat(),
+            bMat = new Mat();
+
+        int result = -1;
+        int delta = 20;
+        for(int i = 0; i < colors.length; i++) {
+            Scalar col = colors[i];
+            Core.split(check, channels);
+            Core.inRange(channels.get(0), new Scalar(col.val[0] - delta), new Scalar(col.val[0] + delta), rMat);
+            Core.inRange(channels.get(1), new Scalar(col.val[1] - delta), new Scalar(col.val[1] + delta), gMat);
+            Core.inRange(channels.get(2), new Scalar(col.val[2] - delta), new Scalar(col.val[2] + delta), bMat);
+
+            Core.bitwise_and(rMat, gMat, checker);
+            Core.bitwise_and(bMat, checker, checker);
+            // Is checker not empty? If so, we have a value.
+            if (Core.countNonZero(checker) != 0) {
+            //if (Core.checkRange(checker, true, 1, 255)) {
+                result = i;
+                break;
+            }
+        }
+        // Is dis bad?
+        check.release();
+        rMat.release();
+        gMat.release();
+        bMat.release();
+        checker.release();
+
+        return result;
+        */
+        /*
+        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_HSV2RGB);
+        double[] rgb = camInput.get((int)potentialTarget.center.y,(int)potentialTarget.center.x);
+        Log.i("CenterColor", "(" + rgb[0] + ", " + rgb[1] + ", " + rgb[2] + ")");
+        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_RGB2HSV);
+
+        int thresh = 100;
+        for(int i = 0; i < colors.length; i++) {
+            Scalar col = colors[i];
+            double dr = col.val[0] - rgb[0];
+            double dg = col.val[1] - rgb[1];
+            double db = col.val[2] - rgb[2];
+            double distanceSqr = dr*dr + dg*dg + db*db;
+            if (distanceSqr < thresh*thresh) {
+                // If our central pixel is close enough...
+                return i;
+            }
+        }
+        return -1;
+        */
+    }
+
+    /**
+     *   Grabs a rotated rect corresponding to a player target
+     * @param camInput    The camera frame input
+     * @param rectOutput  A rotated rect that we output containing the position
+     * @return the ID of our target
+     */
+    private int getTarget(Mat camInput, RotatedRect rectOutput) {
         Mat mask = new Mat();
         // Convert to HSV
 
@@ -235,8 +332,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         Core.bitwise_and(satFiltered, valFiltered, mask);
 
         // Erode and Dilate
-        Mat erodeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
-        Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
+        Mat erodeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(7, 7));
+        Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(5, 5));
         Imgproc.erode(mask, mask, erodeKernel);
         Imgproc.dilate(mask, mask, dilateKernel);
 
@@ -248,22 +345,70 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
         double largestArea = 0.0;
         RotatedRect largestRect = null;
+        int targetPlayerID = -1;
         for(MatOfPoint mop : contours) {
             MatOfPoint2f mop2f = new MatOfPoint2f();
             mop.convertTo(mop2f, CvType.CV_32FC1);
             RotatedRect rect = Imgproc.minAreaRect(mop2f);
 
+            // If our rect is big enough and the biggest....
             if (rect.size.area() > largestArea && rect.size.area() > areaThresh) {
-                largestArea = rect.size.area();
-                largestRect = rect;
+                targetPlayerID = verifyCentralColor(camInput, rect);
+                // If we detect a valid player color...
+                if (targetPlayerID != -1) {
+                    largestArea = rect.size.area();
+                    largestRect = rect;
+                }
             }
             mop.release();
             mop2f.release();
         }
         Log.i("Largest Area:", "area: " + largestArea);
+        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_HSV2RGB);
+        if (IS_DEBUG_VIDEO) {
+            // Draw a circle or whatever around our main rect!
+            Imgproc.cvtColor(mask, mask, Imgproc.COLOR_GRAY2RGB);
+            if (largestRect != null) {
+                Imgproc.circle(mask, largestRect.center, 10, new Scalar(255, 0, 0));
+            }
+            Core.bitwise_not(mask, mask);
+            // Draw our green stuff, and only our green stuff!
+            Core.subtract(camInput, mask, camInput);
 
-        // Set our target. NOTE: This can be null.
-        setTarget(largestRect);
+            //mask.copyTo(camInput);
+        }
+        mask.release();
+        erodeKernel.release();
+        dilateKernel.release();
+
+        if (largestRect != null) {
+            // Set values of output rect so we can grab it
+            double[] vals = {
+                    largestRect.center.x,
+                    largestRect.center.y,
+                    largestRect.size.width,
+                    largestRect.size.height,
+                    largestRect.angle
+            };
+            rectOutput.set(vals);
+        }
+
+        return targetPlayerID;
+    }
+
+    @Override
+    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+        camInput = inputFrame.rgba();
+
+        RotatedRect target = new RotatedRect();
+        int targetPlayer = getTarget(camInput, target);
+
+        if (targetPlayer  == -1) {
+            setTarget(null);
+        } else {
+            setTarget(target);
+            Log.i("Player ID", "target: " + targetPlayer);
+        }
 
         // Are we positioned to actually HIT a target?
         setLockedOn(false);
@@ -279,16 +424,11 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
                 }
             }
 
-            double dx = getTarget().center.x - mask.width() / 2,
-                   dy = getTarget().center.y - mask.height() / 2;
+            double dx = getTarget().center.x - camInput.width() / 2,
+                   dy = getTarget().center.y - camInput.height() / 2;
 
             if (dx*dx + dy*dy < SHOOT_THRESHOLD*SHOOT_THRESHOLD) {
                 setLockedOn(true);
-            }
-            if (IS_DEBUG_VIDEO) {
-                // Draw a circle or whatever around our main rect!
-                Imgproc.cvtColor(mask, mask, Imgproc.COLOR_GRAY2RGB);
-                Imgproc.circle(mask, getTarget().center, 10, new Scalar(255, 0, 0));
             }
         } else {
             // Reset our time exposed timer
@@ -300,12 +440,21 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         }
 
         // Mask if we're debugging, Green screen, if we're playing the game
-        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_HSV2RGB);
-        if (IS_DEBUG_VIDEO) {
-            mask.copyTo(camInput);
-        } else {
+//        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_HSV2RGB);
+        if (!IS_DEBUG_VIDEO) {
             if (isAlive()) {
+                int w = 200,
+                    h = 200;
+                String name = Database.getPlayer ().getId();
                 camInput.setTo(new Scalar(0, 255, 0));
+                // Draw color rectangle in middle
+                /*
+                Imgproc.rectangle(camInput, new Point(camInput.width()/2 - w/2, camInput.height()/2 - h/2),
+                                            new Point(camInput.width()/2 + w/2, camInput.height()/2 + h/2),
+                                            getPlayerCenterColor(name),
+                                            -1 // -1 means fill the rectangle
+                );
+                */
             } else {
                 camInput.setTo(new Scalar(255, 100, 100));
             }
@@ -315,9 +464,6 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         for(Mat mat : channels) {
             mat.release();
         }
-        mask.release();
-        erodeKernel.release();
-        dilateKernel.release();
         System.gc();
 
         if (IS_DEBUG_VIDEO) {
