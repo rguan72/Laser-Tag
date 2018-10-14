@@ -24,6 +24,7 @@ import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -52,7 +53,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     // Are we showing the filtered video feed?
     // set to FALSE when deploying
-    private static final boolean IS_DEBUG_VIDEO = false;
+    private static final boolean IS_DEBUG_VIDEO = true;
 
     // Radius of accuracy needed to shoot a target
     private static final int SHOOT_THRESHOLD = 200;
@@ -569,5 +570,12 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     public static void die() {
         isAlive = false;
         playSound(soundID_death);
+    }
+
+    // Go to end screen
+    public void startEnding()
+    {
+        Intent intent = new Intent(this, EndActivity.class);
+        startActivity(intent);
     }
 }
