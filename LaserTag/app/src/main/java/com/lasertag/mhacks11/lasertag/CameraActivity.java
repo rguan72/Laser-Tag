@@ -79,7 +79,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     private SoundPool soundPool;
     private int soundID_shoot,
                 soundID_empty,
-                soundID_reload;
+                soundID_reload,
+                soundID_death;
 
     private ArrayList<Mat> channels;
     private Mat camInput;
@@ -140,7 +141,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         });*/
         soundID_shoot  = soundPool.load(this, R.raw.shoot,  1);
         soundID_empty  = soundPool.load(this, R.raw.empty,  1);
-        soundID_reload = soundPool.load(this, R.raw.reload, 1);
+        soundID_reload = soundPool.load(this, R.raw.reload, 2);
+        soundID_death  = soundPool.load(this, R.raw.death, 2);
 
         mOpenCvCameraView = findViewById(R.id.camera_activity_surface_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
@@ -414,5 +416,6 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     }
     private void die() {
         isAlive = false;
+        playSound(soundID_death);
     }
 }
