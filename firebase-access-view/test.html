@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/5.5.3/firebase.js"></script>
+  </head>
+  <body>
+    
+    <h2 id="p1tag"> Player 1: (offline) </h2>
+    <h2 id="p2tag"> Player 2: (offline) </h2>
+
+    <script>
+        var pname = ["Player 1", "Player 2"];
+        // Initialize Firebase
+  		var config = {
+  		  apiKey: "AIzaSyA35ECfUOlJXovGs9T-4IGBIEnuc-qw7qA",
+  		  authDomain: "laser-tag-15b95.firebaseapp.com",
+  		  databaseURL: "https://laser-tag-15b95.firebaseio.com",
+  		  projectId: "laser-tag-15b95",
+  		  storageBucket: "laser-tag-15b95.appspot.com",
+  		  messagingSenderId: "589806699312"
+  		};
+  		firebase.initializeApp(config);
+        
+        var db = firebase.database();
+
+        function setPlayerThing(num, text) {
+          document.getElementById("p" + num + "tag").innerHTML = 
+            pname[num - 1] + ": " + text;
+        }
+
+        // Init player ref
+        var playerRef = firebase.database().ref('players/');
+        playerRef.on('value', function(snapshot) {
+          console.log(snapshot.val());
+
+          if (snapshot.val() == undefined) return;
+          if (snapshot.val()["player1"] == undefined) return;
+          pname[0] = snapshot.val()["player1"].name;
+          setPlayerThing(1, "ONLINE");
+          if (snapshot.val()["player2"] == undefined) return;
+          pname[1] = snapshot.val()["player2"].name;
+          setPlayerThing(2, "ONLINE");
+          
+          var p1dead = snapshot.val()["player1"].deaths;
+          var p2dead = snapshot.val()["player2"].deaths;
+          if (p1dead == 1) {
+            setPlayerThing(1, "DEAD");
+            setPlayerThing(2, "WINNER WINNER CHICKEN DINNER!");
+          }
+          if (p2dead == 1) {
+            setPlayerThing(1, "WINNER WINNER CHICKEN DINNER!");
+            setPlayerThing(2, "DEAD");
+          }
+        });
+        var playerCount = firebase.database().ref('numPlayers/');
+        playerCount.on('value', function(snapshot) {
+          if (snapshot.val() != 0) {
+          } else {
+              pname = ["Player 1", "Player 2"];
+              setPlayerThing(1, "(offline)");
+              setPlayerThing(2, "(offline)");
+          }
+        });
+
+        function push() {
+			console.log("Yay!");
+        	writeData('Potato', 'Test');
+        }
+
+        function writeData(user, data) {
+            db.ref('thing/' + user).set({
+                data: data
+            });
+        }
+    </script>
+  </body>
+</html>
