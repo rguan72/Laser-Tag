@@ -59,6 +59,11 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     // How many milliseconds to wait for exposure before reloading
     private static final int EXPOSE_TIME_THRESHOLD = 500;
 
+    // The Game ID of this user. Set when you "join" the game
+    private int myGameID = -1;
+    // Are we alive?
+    private boolean isAlive = true;
+
     // The target that we find
     private RotatedRect target = null;
     // Are we locked on and able to shoot a target?
@@ -119,6 +124,9 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
         //Ask for Camera Permission
         getCameraPermission();
+
+        // We're alive!
+        isAlive = true;
 
         // Audio
         soundPool = new SoundPool(10, AudioManager.STREAM_MUSIC, 0);
@@ -231,14 +239,13 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         Imgproc.erode(mask, mask, erodeKernel);
         Imgproc.dilate(mask, mask, dilateKernel);
 
-        erodeKernel.release();
-        dilateKernel.release();
-
+        // Contour analysis!
         List<MatOfPoint> contours = new ArrayList<>();
         Imgproc.findContours(mask, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+        // Our rectangles must be above this threshold
+        double areaThresh = 10.0;
 
         double largestArea = 0.0;
-        double areaThresh = 10.0;
         RotatedRect largestRect = null;
         for(MatOfPoint mop : contours) {
             MatOfPoint2f mop2f = new MatOfPoint2f();
@@ -249,6 +256,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
                 largestArea = rect.size.area();
                 largestRect = rect;
             }
+            mop.release();
+            mop2f.release();
         }
         Log.i("Largest Area:", "area: " + largestArea);
 
@@ -286,7 +295,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         }
 
         if (isLockedOn()) {
-            vibrate(100);
+            vibrate(200);
         }
 
         // Mask if we're debugging, Green screen, if we're playing the game
@@ -294,7 +303,11 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         if (IS_DEBUG_VIDEO) {
             mask.copyTo(camInput);
         } else {
-            camInput.setTo(new Scalar(0, 255, 0));
+            if (isAlive()) {
+                camInput.setTo(new Scalar(0, 255, 0));
+            } else {
+                camInput.setTo(new Scalar(255, 100, 100));
+            }
         }
 
         // Clean up
@@ -321,14 +334,16 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
      * Pew Pew!
      */
     void shoot() {
-        if (hasAmmo()) {
-            loseAmmo();
-            if (isLockedOn()) {
-                //TODO: Hit player!
+        if (isAlive()) {
+            if (hasAmmo()) {
+                loseAmmo();
+                if (isLockedOn()) {
+                    //TODO: Hit player!
+                }
+                playSound(soundID_shoot);
+            } else {
+                playSound(soundID_empty);
             }
-            playSound(soundID_shoot);
-        } else {
-            playSound(soundID_empty);
         }
     }
 
@@ -370,7 +385,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         return target;
     }
     private boolean hasTarget() {
-        return target != null;
+        return target != null && isAlive();
     }
 
     // Locked on getters and setters
@@ -378,12 +393,12 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         this.lockedOn = lockedOn;
     }
     private boolean isLockedOn() {
-        return lockedOn;
+        return lockedOn && isAlive();
     }
 
     // Ammo
     private boolean hasAmmo() {
-        return hasAmmo;
+        return hasAmmo && isAlive();
     }
     private void reload() {
         playSound(soundID_reload);
@@ -391,5 +406,13 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     }
     private void loseAmmo() {
         hasAmmo = false;
+    }
+
+    // Is alive?
+    private boolean isAlive() {
+        return isAlive;
+    }
+    private void die() {
+        isAlive = false;
     }
 }
