@@ -240,6 +240,9 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         List<MatOfPoint> contours = new ArrayList<>();
         Imgproc.findContours(camInput, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
+
+        // Filter by min area?
+
         double largestArea = 0.0;
         RotatedRect largestRect = null;
         for(MatOfPoint mop : contours) {
@@ -302,15 +305,16 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP) || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             shoot();
             return true;
-            // if you are in the circle -- reuse code from vibration
-            //      player 1 kills += 1
-            //      player 2 lives -= = 1
         }
         return super.onKeyDown(keyCode, event);
     }
 
+    // Check if player is dead
+    // If player is dead, switch to "death screen" activity
     void shoot() {
         Log.i(TAG, "press registered!");
+        if (isLockedOn()) {
+        }
     }
 
 
