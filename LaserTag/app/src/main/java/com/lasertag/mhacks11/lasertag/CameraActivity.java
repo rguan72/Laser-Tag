@@ -20,14 +20,21 @@ import org.opencv.imgproc.Imgproc;
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.SoundPool;
 import android.os.Build;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.text.InputType;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
@@ -37,16 +44,43 @@ import android.view.SurfaceView;
 import android.widget.Button;
 import android.widget.EditText;
 
-//import com.google.firebase.database.DataSnapshot;
-//import com.google.firebase.database.DatabaseError;
-//import com.google.firebase.database.DatabaseReference;
-//import com.google.firebase.database.FirebaseDatabase;
-//import com.google.firebase.database.ValueEventListener;
-
 
 
 public class CameraActivity extends Activity implements OnTouchListener, CvCameraViewListener2 {
     private static final String  TAG = "CameraActivity";
+
+    // Are we showing the filtered video feed?
+    // set to FALSE when deploying
+    private static final boolean IS_DEBUG_VIDEO = false;
+
+    // Radius of accuracy needed to shoot a target
+    private static final int SHOOT_THRESHOLD = 200;
+
+    // How many milliseconds to wait for exposure before reloading
+    private static final int EXPOSE_TIME_THRESHOLD = 500;
+
+    // The Game ID of this user. Set when you "join" the game
+    private int myGameID = -1;
+    // Are we alive?
+    private boolean isAlive = true;
+
+    // The target that we find
+    private RotatedRect target = null;
+    // Are we locked on and able to shoot a target?
+    private boolean lockedOn;
+
+    // Do we have ammo
+    private boolean hasAmmo = false;
+
+    // When's the last time we were exposed?
+    private long lastTimeExposed = 0;
+
+    // Audio handling
+    private SoundPool soundPool;
+    private int soundID_shoot,
+                soundID_empty,
+                soundID_reload,
+                soundID_death;
 
     private ArrayList<Mat> channels;
     private Mat camInput;
@@ -56,8 +90,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     private CameraBridgeViewBase mOpenCvCameraView;
 
-
-
+    
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
@@ -93,56 +126,29 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         //Ask for Camera Permission
         getCameraPermission();
 
-        //Search for the "Join" Button
-        /*Button button = findViewById(R.id.join);
-        button.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v)
-            {
-                //Creating text dialog
-                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                builder.setTitle("Username");
+        // We're alive!
+        isAlive = true;
 
-                // Set up the input
-                final EditText input = new EditText(MainActivity.this);
-                // Specify the type of input expected; this, for example, sets the input as a password, and will mask the text
-                input.setInputType(InputType.TYPE_CLASS_TEXT);
-                builder.setView(input);
-
-                // Set up the buttons
-                builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which)
-                    {
-                        String name = input.getText().toString();
-                        Player player = new Player (name);
-
-                        //Get Database
-                        FirebaseDatabase database = FirebaseDatabase.getInstance();
-                        //Select "path" in database
-                        DatabaseReference myRef = database.getReference("players");
-                        //Set Value
-                        myRef.setValue(player);
-                    }
-                });
-                builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.cancel();
-                    }
-                });
-
-                builder.show();
+        // Audio
+        soundPool = new SoundPool(10, AudioManager.STREAM_MUSIC, 0);
+        // TODO: Can this be left commented out?
+        /*soundPool.setOnLoadCompleteListener(new SoundPool.OnLoadCompleteListener() {
+            @Override
+            public void onLoadComplete(SoundPool soundPool, int sampleId,
+                                       int status) {
+                loaded = true;
             }
         });*/
+        soundID_shoot  = soundPool.load(this, R.raw.shoot,  1);
+        soundID_empty  = soundPool.load(this, R.raw.empty,  1);
+        soundID_reload = soundPool.load(this, R.raw.reload, 2);
+        soundID_death  = soundPool.load(this, R.raw.death, 2);
 
         mOpenCvCameraView = findViewById(R.id.camera_activity_surface_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
-
         getCameraPermission();
-
-
     }
 
     @Override
@@ -173,9 +179,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     @TargetApi(Build.VERSION_CODES.M)
     private void getCameraPermission ()
     {
-        //Log.d ("HI", "HI");
         int permissionCheck = getApplicationContext().checkSelfPermission(Manifest.permission.CAMERA);
-        //Log.d("Permission", "Permission: " + permissionCheck + ", and " + PackageManager.PERMISSION_DENIED);
         if (permissionCheck== PackageManager.PERMISSION_DENIED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA},0);
         }
@@ -192,12 +196,23 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     public void onCameraViewStopped() {
         // TODO: Release all mats
-        //mRgba.release();
+        camInput.release();
     }
 
+    // INPUTS
     public boolean onTouch(View v, MotionEvent event) {
         // TODO: Fire!
+        shoot();
         return false; // don't need subsequent touch events
+    }
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+
+        if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP) || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            shoot();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
@@ -211,28 +226,26 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         // Split channels
         Core.split(camInput, channels);
 
-//        // Filter RGB
-//        Core.inRange(channels.get(0), new Scalar(0), new Scalar(150), hueFiltered);
-//        Core.inRange(channels.get(0), new Scalar(100), new Scalar(255), satFiltered);
-//        Core.inRange(channels.get(0), new Scalar(0), new Scalar(150), valFiltered);
-
 //          //Filter HSV
         Core.inRange(channels.get(0), new Scalar(40), new Scalar(93), hueFiltered );
-        Core.inRange(channels.get(1), new Scalar(60), new Scalar(255), satFiltered );
-        Core.inRange(channels.get(2), new Scalar(48), new Scalar(238), valFiltered );
+        Core.inRange(channels.get(1), new Scalar(154), new Scalar(255), satFiltered );
+        Core.inRange(channels.get(2), new Scalar(67), new Scalar(238), valFiltered );
 
 //        // Mix together
         Core.bitwise_and(hueFiltered, satFiltered, satFiltered);
-        Core.bitwise_and(satFiltered, valFiltered, camInput);
+        Core.bitwise_and(satFiltered, valFiltered, mask);
 
         // Erode and Dilate
         Mat erodeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
-        Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(9, 9));
-        Imgproc.erode(camInput, camInput, erodeKernel);
-        Imgproc.dilate(camInput, camInput, dilateKernel);
+        Mat dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3));
+        Imgproc.erode(mask, mask, erodeKernel);
+        Imgproc.dilate(mask, mask, dilateKernel);
 
+        // Contour analysis!
         List<MatOfPoint> contours = new ArrayList<>();
-        Imgproc.findContours(camInput, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+        Imgproc.findContours(mask, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+        // Our rectangles must be above this threshold
+        double areaThresh = 10.0;
 
         double largestArea = 0.0;
         RotatedRect largestRect = null;
@@ -241,18 +254,65 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
             mop.convertTo(mop2f, CvType.CV_32FC1);
             RotatedRect rect = Imgproc.minAreaRect(mop2f);
 
-            if (rect.size.area() > largestArea) {
+            if (rect.size.area() > largestArea && rect.size.area() > areaThresh) {
                 largestArea = rect.size.area();
                 largestRect = rect;
             }
+            mop.release();
+            mop2f.release();
+        }
+        Log.i("Largest Area:", "area: " + largestArea);
+
+        // Set our target. NOTE: This can be null.
+        setTarget(largestRect);
+
+        // Are we positioned to actually HIT a target?
+        setLockedOn(false);
+        if (hasTarget()) {
+            // Reload
+            if (!hasAmmo()) {
+                // How much time has passed since we were exposed
+                long dtime = System.currentTimeMillis() - lastTimeExposed;
+                if (dtime > EXPOSE_TIME_THRESHOLD) {
+                    reload();
+                    // Reset our time exposed timer
+                    lastTimeExposed = System.currentTimeMillis();
+                }
+            }
+
+            double dx = getTarget().center.x - mask.width() / 2,
+                   dy = getTarget().center.y - mask.height() / 2;
+
+            if (dx*dx + dy*dy < SHOOT_THRESHOLD*SHOOT_THRESHOLD) {
+                setLockedOn(true);
+            }
+            if (IS_DEBUG_VIDEO) {
+                // Draw a circle or whatever around our main rect!
+                Imgproc.cvtColor(mask, mask, Imgproc.COLOR_GRAY2RGB);
+                Imgproc.circle(mask, getTarget().center, 10, new Scalar(255, 0, 0));
+            }
+        } else {
+            // Reset our time exposed timer
+            lastTimeExposed = System.currentTimeMillis();
         }
 
-        if (largestRect != null) {
-            // Draw a circle or whatever around our main rect!
-            Imgproc.circle(camInput, largestRect.center, 10, new Scalar(255, 0, 0));
+        if (isLockedOn()) {
+            vibrate(200);
         }
 
-        // Free up
+        // Mask if we're debugging, Green screen, if we're playing the game
+        Imgproc.cvtColor(camInput, camInput, Imgproc.COLOR_HSV2RGB);
+        if (IS_DEBUG_VIDEO) {
+            mask.copyTo(camInput);
+        } else {
+            if (isAlive()) {
+                camInput.setTo(new Scalar(0, 255, 0));
+            } else {
+                camInput.setTo(new Scalar(255, 100, 100));
+            }
+        }
+
+        // Clean up
         for(Mat mat : channels) {
             mat.release();
         }
@@ -261,15 +321,101 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
         dilateKernel.release();
         System.gc();
 
-        // Flip video so it's reasonable when displayed
-        Mat dest = new Mat();
-        Core.flip(camInput, dest, 1);
-        dest.copyTo(camInput);
-        dest.release();
-
-        // Green screen
+        if (IS_DEBUG_VIDEO) {
+            // Flip video so it's reasonable when displayed
+            Mat dest = new Mat();
+            Core.flip(camInput, dest, 1);
+            dest.copyTo(camInput);
+            dest.release();
+        }
 
         return camInput;
     }
-}
 
+    /**
+     * Pew Pew!
+     */
+    void shoot() {
+        if (isAlive()) {
+            if (hasAmmo()) {
+                loseAmmo();
+                if (isLockedOn()) {
+                    //TODO: Hit player!
+                }
+                playSound(soundID_shoot);
+            } else {
+                playSound(soundID_empty);
+            }
+        }
+    }
+
+    /**
+     * Vibrates phone for a given time in milliseconds
+     * @param ms : Time (in milliseconds) to vibrate
+     */
+    private void vibrate(int ms) {
+        Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            v.vibrate(VibrationEffect.createOneShot(ms,VibrationEffect.DEFAULT_AMPLITUDE));
+        }else{
+            //deprecated in API 26
+            v.vibrate(ms);
+        }
+    }
+
+    /**
+     * Plays a sound
+     * @param soundID (one of three. See declarations above.)
+     */
+    private void playSound(int soundID) {
+        AudioManager audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        float actualVolume = (float) audioManager
+                .getStreamVolume(AudioManager.STREAM_MUSIC);
+        float maxVolume = (float) audioManager
+                .getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        float volume = actualVolume / maxVolume;
+        soundPool.play(soundID, volume, volume, 1, 0, 1f);
+    }
+
+
+    // Target getters and setters
+    private void setTarget(RotatedRect target) {
+        this.target = target;
+    }
+    private RotatedRect getTarget() {
+        return target;
+    }
+    private boolean hasTarget() {
+        return target != null && isAlive();
+    }
+
+    // Locked on getters and setters
+    private void setLockedOn(boolean lockedOn) {
+        this.lockedOn = lockedOn;
+    }
+    private boolean isLockedOn() {
+        return lockedOn && isAlive();
+    }
+
+    // Ammo
+    private boolean hasAmmo() {
+        return hasAmmo && isAlive();
+    }
+    private void reload() {
+        playSound(soundID_reload);
+        hasAmmo = true;
+    }
+    private void loseAmmo() {
+        hasAmmo = false;
+    }
+
+    // Is alive?
+    private boolean isAlive() {
+        return isAlive;
+    }
+    private void die() {
+        isAlive = false;
+        playSound(soundID_death);
+    }
+}

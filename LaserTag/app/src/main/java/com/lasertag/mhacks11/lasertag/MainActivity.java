@@ -8,6 +8,9 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
 import android.widget.EditText;
+import android.util.Log;
+import android.view.View;
+import android.view.KeyEvent;
 
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -73,4 +76,6 @@ public class MainActivity extends AppCompatActivity
     {
         db.killPlayer("player" + db.getNumPlayers());
     }
+
+
 }
