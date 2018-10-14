@@ -1,5 +1,9 @@
 package com.lasertag.mhacks11.lasertag;
 
+import android.content.Intent;
+import android.graphics.Color;
+import android.os.CountDownTimer;
+import android.os.Handler;
 import android.util.Log;
 
 import com.google.firebase.database.DataSnapshot;
@@ -108,19 +112,6 @@ public class Database
                 else
                     totalDeaths = (long) tmp;
                 Log.d ("totalDeaths", "" + totalDeaths);
-
-                if (player != null && player.getDeaths() > 0)
-                    CameraActivity.die ();
-
-                if (numPlayers > 1 && numPlayers - totalDeaths <= 1)
-                {
-                    numPlayers = 0;
-                    totalDeaths = 0;
-                    myRef.child ("numPlayers").setValue(numPlayers);
-                    myRef.child ("totalDeaths").setValue(totalDeaths);
-                    myRef.child ("players").removeValue();
-                    //CameraActivity.startEnding();
-                }
             }
             @Override
             public void onCancelled(DatabaseError databaseError)
@@ -137,10 +128,24 @@ public class Database
             @Override
             public void onDataChange(DataSnapshot snapshot)
             {
-                if (player != null)
-                    Log.d ("hotpotato", (long) snapshot.child (player.getId()).child ("deaths").getValue() + "");
+//                if (player != null)
+//                    Log.d ("hotpotato", (long) snapshot.child (player.getId()).child ("deaths").getValue() + "");
                 if (player != null && (long) snapshot.child (player.getId()).child ("deaths").getValue() > 0)
                     CameraActivity.die();
+                else if (totalDeaths > 0)
+                {
+                    Handler handler = new Handler();
+                    handler.postDelayed(new Runnable()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            Intent intent = new Intent(MainActivity.getmContext(), MainActivity.class);
+                            MainActivity.getmContext().startActivity(intent);
+                        }
+                    }, 1000);
+                }
+
 
                 /*if (numPlayers - totalDeaths <= 1)
                 {
@@ -157,5 +162,14 @@ public class Database
 
             }
         });
+    }
+
+    public static void resetDatabase ()
+    {
+        numPlayers = 0;
+        totalDeaths = 0;
+        myRef.child ("numPlayers").setValue(numPlayers);
+        myRef.child ("totalDeaths").setValue(totalDeaths);
+        myRef.child ("players").removeValue();
     }
 }
