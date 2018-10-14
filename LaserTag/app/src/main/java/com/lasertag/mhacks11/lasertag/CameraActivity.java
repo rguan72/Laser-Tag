@@ -325,8 +325,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
 //          //Filter HSV
         Core.inRange(channels.get(0), new Scalar(40), new Scalar(93), hueFiltered );
-        Core.inRange(channels.get(1), new Scalar(154), new Scalar(255), satFiltered );
-        Core.inRange(channels.get(2), new Scalar(67), new Scalar(238), valFiltered );
+        Core.inRange(channels.get(1), new Scalar(154 - 50), new Scalar(255), satFiltered );
+        Core.inRange(channels.get(2), new Scalar(67 - 30), new Scalar(238 + 10), valFiltered );
 
 //        // Mix together
         Core.bitwise_and(hueFiltered, satFiltered, satFiltered);
@@ -400,6 +400,8 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         camInput = inputFrame.rgba();
+
+        //Imgproc.resize(camInput, camInput, new Size(camInput.width() / 3,camInput.width() / 3));
 
         RotatedRect target = new RotatedRect();
         int targetPlayer = getTarget(camInput, target);
@@ -475,6 +477,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
             dest.release();
         }
 
+        //Imgproc.resize(camInput, camInput, new Size(camInput.width() * 3,camInput.width() * 3));
         return camInput;
     }
 
