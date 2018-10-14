@@ -13,7 +13,7 @@ public class Database
     private static DatabaseReference myRef = FirebaseDatabase.getInstance ().getReference();
     private static long numPlayers;
     private static long totalDeaths;
-    private static Player player;
+    private static Player player = null;
 
     public static long getNumPlayers ()
     {
@@ -54,6 +54,7 @@ public class Database
             {
                 Object tmp = snapshot.getValue();
                 long death = ((long) tmp) + 1;
+                player.setDeaths((int) death);
                 ++totalDeaths;
                 myRef.child ("totalDeaths").setValue(totalDeaths);
                 myRef.child("players").child (id).child ("deaths").setValue(death);
@@ -103,17 +104,49 @@ public class Database
                     totalDeaths = (long) tmp;
                 Log.d ("totalDeaths", "" + totalDeaths);
 
-                if (player.getDeaths() > 0)
+                if (player != null && player.getDeaths() > 0)
                     CameraActivity.die ();
 
-                if (numPlayers - totalDeaths <= 1)
+                /*if (numPlayers - totalDeaths <= 1)
                 {
                     numPlayers = 0;
                     totalDeaths = 0;
                     myRef.child ("numPlayers").setValue(numPlayers);
                     myRef.child ("totalDeaths").setValue(totalDeaths);
                     myRef.child ("players").removeValue();
+                }*/
+            }
+            @Override
+            public void onCancelled(DatabaseError databaseError)
+            {
+
+            }
+        });
+    }
+
+    public static void updatePlayers ()
+    {
+        myRef.child("players").addValueEventListener(new ValueEventListener()
+        {
+            @Override
+            public void onDataChange(DataSnapshot snapshot)
+            {
+                if (player != null)
+                    Log.d ("hotpotato", player.getName() + ", " + player.getDeaths());
+                if (player != null && player.getDeaths() > 0)
+                {
+                    Log.d("death", player.getName() + " died!");
+                    CameraActivity.die();
                 }
+
+                /*if (numPlayers - totalDeaths <= 1)
+                {
+                    numPlayers = 0;
+                    totalDeaths = 0;
+                    myRef.child ("numPlayers").setValue(numPlayers);
+                    myRef.child ("totalDeaths").setValue(totalDeaths);
+                    myRef.child ("players").removeValue();
+                }*/
             }
             @Override
             public void onCancelled(DatabaseError databaseError)

@@ -3,6 +3,7 @@ package com.lasertag.mhacks11.lasertag;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.provider.ContactsContract;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.InputType;
@@ -29,6 +30,7 @@ public class MainActivity extends AppCompatActivity
 
         Database.updateNumPlayers ();
         Database.updateTotalDeaths ();
+        Database.updatePlayers();
     }
 
     public void join (View view)
