@@ -37,7 +37,7 @@ public class Database
         ++numPlayers;
         myRef.child ("numPlayers").setValue(numPlayers);
 
-        player = new Player(name);
+        player = new Player("player" + numPlayers, name);
         myRef.child ("players").child ("player" + numPlayers).setValue(player);
     }
 
@@ -54,10 +54,10 @@ public class Database
             {
                 Object tmp = snapshot.getValue();
                 long death = ((long) tmp) + 1;
-                player.setDeaths((int) death);
+                myRef.child("players").child (id).child ("deaths").setValue(death);
+
                 ++totalDeaths;
                 myRef.child ("totalDeaths").setValue(totalDeaths);
-                myRef.child("players").child (id).child ("deaths").setValue(death);
             }
             @Override
             public void onCancelled(DatabaseError databaseError)
@@ -132,12 +132,9 @@ public class Database
             public void onDataChange(DataSnapshot snapshot)
             {
                 if (player != null)
-                    Log.d ("hotpotato", player.getName() + ", " + player.getDeaths());
-                if (player != null && player.getDeaths() > 0)
-                {
-                    Log.d("death", player.getName() + " died!");
+                    Log.d ("hotpotato", (long) snapshot.child (player.getId()).child ("deaths").getValue() + "");
+                if (player != null && (long) snapshot.child (player.getId()).child ("deaths").getValue() > 0)
                     CameraActivity.die();
-                }
 
                 /*if (numPlayers - totalDeaths <= 1)
                 {

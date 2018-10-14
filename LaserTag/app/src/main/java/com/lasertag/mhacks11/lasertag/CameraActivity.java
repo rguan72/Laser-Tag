@@ -340,7 +340,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
                 loseAmmo();
                 // If we're locked on, kill the other player
                 if (isLockedOn()) {
-                    String name = Database.getPlayer ().getName();
+                    String name = Database.getPlayer ().getId();
 
                     // 1v1 ONLY!!!
                     if (name.equals("player2"))

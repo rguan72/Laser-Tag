@@ -2,6 +2,7 @@ package com.lasertag.mhacks11.lasertag;
 
 public class Player
 {
+    private String id;
     private String name;
     private int kills, deaths;
 
@@ -10,11 +11,17 @@ public class Player
 
     }
 
-    public Player (String name)
+    public Player (String id, String name)
     {
+        this.id = id;
         this.name = name;
         this.kills = 0;
         this.deaths = 0;
+    }
+
+    public String getId ()
+    {
+        return id;
     }
 
     public String getName()
