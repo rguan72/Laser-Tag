@@ -32,8 +32,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_weight="0"
-        android:onClick="kill"
-        android:text="Kill!"
+        android:onClick="resetDatabase"
+        android:text="Reset Database!"
         tools:layout_editor_absoluteX="100dp"
         tools:layout_editor_absoluteY="100dp" />
 
@@ -43,7 +43,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="3"
         android:gravity="center"
-        android:text="MHacks11: Hubert, Adris, Richard, Hustin"
+        android:text="MHacks11: Adris, Hubert, Hustin, Richard"
         android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
 
 </LinearLayout>

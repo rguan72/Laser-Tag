@@ -1,6 +1,7 @@
 package com.lasertag.mhacks11.lasertag;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.provider.ContactsContract;
@@ -21,12 +22,16 @@ import com.google.firebase.database.ValueEventListener;
 
 public class MainActivity extends AppCompatActivity
 {
+    private static Context mContext;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        mContext = this;
 
         Database.updateNumPlayers ();
         Database.updateTotalDeaths ();
@@ -79,5 +84,13 @@ public class MainActivity extends AppCompatActivity
         Database.killPlayer("player" + Database.getNumPlayers());
     }
 
+    public void resetDatabase (View view)
+    {
+        Database.resetDatabase();
+    }
 
+    public static Context getmContext ()
+    {
+        return mContext;
+    }
 }
