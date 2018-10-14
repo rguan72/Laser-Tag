@@ -53,7 +53,7 @@ public class CameraActivity extends Activity implements OnTouchListener, CvCamer
 
     // Are we showing the filtered video feed?
     // set to FALSE when deploying
-    private static final boolean IS_DEBUG_VIDEO = true;
+    private static final boolean IS_DEBUG_VIDEO = false;
 
     // Radius of accuracy needed to shoot a target
     private static final int SHOOT_THRESHOLD = 200;

@@ -112,15 +112,14 @@ public class Database
                 if (player != null && player.getDeaths() > 0)
                     CameraActivity.die ();
 
-                if (numPlayers - totalDeaths <= 1)
+                if (numPlayers > 1 && numPlayers - totalDeaths <= 1)
                 {
                     numPlayers = 0;
                     totalDeaths = 0;
                     myRef.child ("numPlayers").setValue(numPlayers);
                     myRef.child ("totalDeaths").setValue(totalDeaths);
                     myRef.child ("players").removeValue();
-                    CameraActivity ca = new CameraActivity();
-                    ca.startEnding();
+                    //CameraActivity.startEnding();
                 }
             }
             @Override
